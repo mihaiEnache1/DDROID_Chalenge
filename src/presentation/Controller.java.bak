@@ -1,0 +1,100 @@
+package presentation;
+
+import connectivity.ConnectionFactory;
+import model.Order;
+import model.Product;
+import model.ShippingRate;
+
+import java.math.RoundingMode;
+import java.sql.Connection;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
+public class Controller {
+    private final GUI gui;
+    private final ConnectionFactory connectionFactory;
+    private final Map<Product, Integer> order;
+    private final ArrayList<Product> products;
+    private final ArrayList<ShippingRate> shippingRates;
+    private final ArrayList<Order> orders;
+    private static final DecimalFormat df = new DecimalFormat("0.00");
+
+    public Controller(GUI gui, ConnectionFactory connectionFactory) {
+        this.gui = gui;
+        this.connectionFactory = connectionFactory;
+        this.order = new HashMap<>();
+        this.products = this.connectionFactory.getProducts();
+        this.shippingRates = this.connectionFactory.getShippingRates();
+        this.orders = new ArrayList<>();
+        createTable();
+
+        this.gui.addButtonListener(e -> {
+            if(e.getSource() == this.gui.getAddButton()) {
+                StringBuilder text = new StringBuilder();
+                Product product = this.products.get(this.gui.getTable().getSelectedRow());
+                if(order.containsKey(product)) {
+                    for(Map.Entry<Product, Integer> set : order.entrySet()) {
+                        if(set.getKey().equals(product)) {
+                            set.setValue(set.getValue() + 1);
+                        }
+                    }
+                } else {
+                    order.put(product, 1);
+                }
+                for(Map.Entry<Product, Integer> set : order.entrySet()) {
+                    if(set.getKey() != null) {
+                        text.append(set.getKey().getName()).append(" x ").append(set.getValue()).append("\n");
+                    }
+                }
+                this.gui.setTextArea(text.toString());
+            }
+        });
+
+        this.gui.addCheckListener(e -> {
+            if(e.getSource() == this.gui.getCheckOutButton()) {
+                df.setRoundingMode(RoundingMode.UP);
+                Order newOrder = new Order();
+                orders.add(newOrder);
+                ArrayList<Double> details = newOrder.compute(this.order, this.shippingRates);
+                String text = "Subtotal: $" + df.format(details.get(0)) +
+                            "\n" + "Shipping: $" + df.format(details.get(1)) + "\n";
+                text += "VAT: $" + df.format(details.get(3)) + "\n\n";
+                if(details.get(2) != 0) {
+                    text += "Discounts:" +  "\n" + "10% off keyboards: -$" + df.format(details.get(2)) + "\n";
+                }
+                if(this.order.size() >= 2) {
+                    text += "$10 off shipping: -$10" + "\n";
+                }
+                text += "Total: $" + df.format(details.get(4));
+                this.gui.setCheckArea(text);
+            }
+        });
+    }
+
+    public void createTable() {
+        ArrayList<Product> productList = this.connectionFactory.getProducts();
+        ArrayList<ShippingRate> shippingRates = this.connectionFactory.getShippingRates();
+        for(Product product : productList) {
+            for(ShippingRate shippingRate : shippingRates) {
+                if(product.getShippedFrom().equals(shippingRate.getCountry())) {
+                    this.gui.getDefaultTableModel().addRow(new Object[]{
+                            product.getName(),
+                            product.getPrice(),
+                            product.getShippedFrom(),
+                            product.getWeight(),
+                            shippingRate.getRate(),
+                    });
+                }
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        GUI gui = new GUI();
+        ConnectionFactory connectionFactory = new ConnectionFactory();
+        Connection connection = ConnectionFactory.getConnection();
+        new Controller(gui, connectionFactory);
+    }
+}
